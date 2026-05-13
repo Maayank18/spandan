@@ -14,12 +14,15 @@ const roomSchema = new mongoose.Schema({
   },
   code: {
     type: String,
-    required: true,
     unique: true
   },
   isActive: {
     type: Boolean,
     default: true
+  },
+  endedAt: {
+    type: Date,
+    default: null
   },
   currentQuestion: {
     type: mongoose.Schema.Types.ObjectId,
@@ -43,7 +46,7 @@ const roomSchema = new mongoose.Schema({
 })
 
 // Generate unique room code before saving
-roomSchema.pre('save', async function(next) {
+roomSchema.pre('save', function(next) {
   if (!this.code) {
     this.code = generateRoomCode()
   }

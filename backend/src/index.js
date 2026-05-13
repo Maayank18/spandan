@@ -11,6 +11,8 @@ import mongoose from 'mongoose'
 import authRoutes from './routes/auth.js'
 import roomRoutes from './routes/rooms.js'
 import questionRoutes from './routes/questions.js'
+import transcriptionRoutes from './routes/transcription.js'
+import responseRoutes from './routes/responses.js'
 
 // Import models for reference
 import './models/index.js'
@@ -53,6 +55,8 @@ app.use('/api/auth/', authLimiter)
 app.use('/api/auth', authRoutes)
 app.use('/api/rooms', roomRoutes)
 app.use('/api/questions', questionRoutes)
+app.use('/api/transcription', transcriptionRoutes)
+app.use('/api/responses', responseRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -128,6 +132,18 @@ io.on('connection', (socket) => {
       questionId: data.questionId,
       results: data.results
     })
+  })
+
+  // New question from teacher (manually created)
+  socket.on('new_question', (data) => {
+    console.log('New question received from teacher:', data.question?.question?.substring(0, 50))
+    const roomCode = data.roomCode
+    const question = data.question
+    if (roomCode && question) {
+      io.to(roomCode).emit('new_question', question)
+    } else {
+      console.error('new_question event missing roomCode or question:', data)
+    }
   })
 
   // Leaderboard update

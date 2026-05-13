@@ -56,6 +56,12 @@ router.get('/:id', authenticate, async (req, res) => {
 router.get('/join/:code', authenticate, authorize('student'), async (req, res) => {
   try {
     const room = await getRoomByCode(req.params.code)
+    
+    // Check if room has ended
+    if (room.endedAt) {
+      return res.status(400).json({ error: 'This room has ended and can no longer be joined' })
+    }
+    
     res.json({ room })
   } catch (error) {
     const status = error.message === 'Room not found' ? 404 : 500
@@ -70,6 +76,11 @@ router.put('/:id', authenticate, authorize('teacher'), async (req, res) => {
     
     if (room.teacher._id.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: 'Only the room owner can update the room' })
+    }
+
+    // Prevent reactivating an ended room
+    if (room.endedAt && req.body.isActive === true) {
+      return res.status(400).json({ error: 'Cannot reactivate an ended room' })
     }
 
     const updatedRoom = await updateRoom(req.params.id, req.body)

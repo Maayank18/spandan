@@ -4,25 +4,81 @@ import useAuthStore from '../stores/authStore'
 import useRoomStore from '../stores/roomStore'
 import useSocketStore from '../stores/socketStore'
 import Sidebar from '../components/Sidebar'
-import SpandanIcon from '../components/SpandanIcon'
+import ThemeToggle from '../components/ThemeToggle'
+import ProfileDropdown from '../components/ProfileDropdown'
 
 function DashboardPage() {
   const navigate = useNavigate()
-  const { user, token, isAuthenticated, logout } = useAuthStore()
-  const { socket, isConnected, currentRoom } = useSocketStore()
-  const { rooms, currentRoom: roomData, isLoading, error, fetchRooms, createRoom, getRoom, updateRoom, deleteRoom, setAuthToken } = useRoomStore()
+  const { user, token, isAuthenticated } = useAuthStore()
+  const { rooms, currentRoom, isLoading, error, fetchRooms, createRoom, setAuthToken } = useRoomStore()
+  const { isConnected } = useSocketStore()
   
   const [roomName, setRoomName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [checked, setChecked] = useState(false)
+  const [stats, setStats] = useState({
+    totalRooms: 0,
+    activeRooms: 0,
+    totalPolls: 0,
+    totalResponses: 0
+  })
 
-  // Set auth token for room store
+  // Initial setup
   useEffect(() => {
     if (token) {
       setAuthToken(token)
       fetchRooms()
+      fetchTeacherStats()
     }
+    setChecked(true)
   }, [token])
+
+  const fetchTeacherStats = async () => {
+    try {
+      // Fetch all rooms
+      const roomsRes = await fetch('/api/rooms', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const roomsData = await roomsRes.json()
+      
+      const allRooms = roomsData.rooms || []
+      const activeRooms = allRooms.filter(r => !r.endedAt)
+      
+      // Fetch all questions for teacher's rooms
+      let totalPolls = 0
+      let totalResponses = 0
+      
+      for (const room of allRooms) {
+        const qRes = await fetch(`/api/questions?roomId=${room._id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        const qData = await qRes.json()
+        totalPolls += (qData.questions || []).length
+        
+        const rRes = await fetch(`/api/responses/stats/room/${room._id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        const rData = await rRes.json()
+        totalResponses += (rData.stats?.totalResponses || 0)
+      }
+      
+      setStats({
+        totalRooms: allRooms.length,
+        activeRooms: activeRooms.length,
+        totalPolls,
+        totalResponses
+      })
+    } catch (err) {
+      console.error('Failed to fetch teacher stats:', err)
+    }
+  }
+
+  // Redirect to login if no token after initial check
+  useEffect(() => {
+    if (checked && !token) {
+      navigate('/')
+    }
+  }, [checked, token, navigate])
 
   const handleCreateRoom = async () => {
     if (!roomName.trim()) return
@@ -30,7 +86,6 @@ function DashboardPage() {
     try {
       await createRoom(roomName.trim())
       setRoomName('')
-      setShowCreateModal(false)
     } catch (err) {
       console.error('Failed to create room:', err)
     } finally {
@@ -38,372 +93,246 @@ function DashboardPage() {
     }
   }
 
-  const handleLogout = () => {
-    logout()
-    navigate('/')
+  // Show spinner while checking
+  if (!checked) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: 'var(--bg-primary)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            border: '4px solid var(--border-color)',
+            borderTopColor: '#3b82f6',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px'
+          }} />
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Loading...</p>
+        </div>
+      </div>
+    )
   }
 
-  if (!isAuthenticated) {
-    navigate('/')
-    return null
-  }
+  // Stats data - default values (will update later)
 
   return (
     <div style={{
       display: 'flex',
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #f8f9fb 90%, #e0e7ff 100%)',
+      background: 'var(--bg-primary)',
       fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif'
     }}>
       <Sidebar user={user} />
       
       {/* Main Content */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <header style={{
-          background: 'linear-gradient(to right, #1e40af, #1e3a8a)',
-        color: 'white',
-        padding: '16px 32px',
+      <div style={{
+        flex: 1,
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+        flexDirection: 'column',
+        marginLeft: '240px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            background: 'rgba(255,255,255,0.2)',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '24px'
-          }}>
-            <SpandanIcon />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '700', margin: 0 }}>Spandan</h1>
-            <p style={{ fontSize: '12px', opacity: 0.8, margin: 0 }}>Teacher Dashboard</p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: isConnected ? '#10b981' : '#ef4444'
-            }}></div>
-            <span style={{ fontSize: '14px' }}>{isConnected ? 'Connected' : 'Disconnected'}</span>
-          </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 16px',
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: '8px',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px' }}>
-        {/* Welcome Banner */}
-        <div style={{
-          background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
-          borderRadius: '20px',
-          padding: '40px',
+        {/* Header - Blue gradient bar */}
+        <header style={{
+          background: 'var(--header-bg)',
           color: 'white',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '32px',
-          boxShadow: '0 10px 40px rgba(30, 64, 175, 0.3)'
+          padding: '24px 32px'
         }}>
-          <div>
-            <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px' }}>
-              Welcome Back, {user?.name || 'Educator'}
-            </h2>
-            <p style={{ fontSize: '16px', opacity: 0.9, margin: 0 }}>
-              Create and manage assessment spaces for your classroom
-            </p>
-          </div>
           <div style={{
-            width: '120px',
-            height: '120px',
-            background: 'rgba(255,255,255,0.2)',
-            borderRadius: '50%',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            <span style={{ fontSize: '48px' }}>📊</span>
+            <div>
+              <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '700' }}>
+                Welcome back, {user?.name || 'Teacher'}!
+              </h1>
+              <p style={{ margin: '4px 0 0', opacity: 0.9, fontSize: '14px' }}>
+                Manage your rooms and questions
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <ThemeToggle />
+              <ProfileDropdown />
+            </div>
           </div>
-        </div>
+        </header>
 
-        {/* Create Room Button */}
-        <div style={{
-          background: 'white',
-          borderRadius: '16px',
-          padding: '32px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-          border: '1px solid #e5e7eb',
-          marginBottom: '32px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '48px',
-                height: '48px',
-                background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <span style={{ fontSize: '24px', color: 'white' }}>📝</span>
-              </div>
-              <div>
-                <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', margin: 0 }}>
-                  Create Assessment Space
-                </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
-                  Set up a new room for your classroom
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              style={{
-                padding: '12px 24px',
-                background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: '600',
-                boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)'
-              }}
-            >
-              + Create New
-            </button>
-          </div>
-        </div>
-
-        {/* Rooms List */}
-        <div style={{
-          background: 'white',
-          borderRadius: '16px',
-          padding: '32px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-          border: '1px solid #e5e7eb'
-        }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '20px' }}>
-            Your Assessment Spaces
-          </h3>
-          
-          {isLoading ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-              Loading rooms...
-            </div>
-          ) : rooms.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-              <span style={{ fontSize: '48px', display: 'block', marginBottom: '16px' }}>📋</span>
-              <p>No assessment spaces yet. Create one to get started!</p>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gap: '16px' }}>
-              {rooms.map((room) => (
-                <div
-                  key={room._id}
-                  style={{
-                    padding: '20px',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
-                  onMouseOut={(e) => e.currentTarget.style.borderColor = '#e5e7eb'}
-                >
-                  <div>
-                    <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937', marginBottom: '4px' }}>
-                      {room.name}
-                    </h4>
-                    <p style={{ fontSize: '14px', color: '#6b7280' }}>
-                      Code: <strong style={{ color: '#1e40af' }}>{room.code}</strong> • 
-                      {room.isActive ? ' Active' : ' Inactive'}
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      style={{
-                        padding: '8px 16px',
-                        background: '#eff6ff',
-                        color: '#1e40af',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                      }}
-                    >
-                      Open
-                    </button>
-                    <button
-                      onClick={() => deleteRoom(room._id)}
-                      style={{
-                        padding: '8px 16px',
-                        background: '#fef2f2',
-                        color: '#dc2626',
-                        border: '1px solid #fecaca',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Stats Cards */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '24px',
-          marginTop: '32px'
-        }}>
-          {[
-            { icon: '🏠', label: 'Total Rooms', value: rooms.length.toString(), color: '#1e40af' },
-            { icon: '📊', label: 'Total Polls', value: '0', color: '#7c3aed' },
-            { icon: '👥', label: 'Total Responses', value: '0', color: '#059669' },
-            { icon: '📈', label: 'Participation Rate', value: '0%', color: '#dc2626' }
-          ].map((stat, index) => (
-            <div key={index} style={{
-              background: 'white',
+        {/* Dashboard content */}
+        <div style={{ flex: 1, padding: '32px' }}>
+          {/* Stats Cards */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '20px',
+            marginBottom: '32px'
+          }}>
+            <div style={{
+              background: 'var(--bg-card)',
               borderRadius: '16px',
               padding: '24px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-              border: '1px solid #e5e7eb'
+              boxShadow: 'var(--card-shadow)',
+              border: '1px solid var(--border-color)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                <span style={{ fontSize: '24px' }}>{stat.icon}</span>
-                <span style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>{stat.label}</span>
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: '700', color: stat.color }}>
-                {stat.value}
-              </div>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📚</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.totalRooms}</div>
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Total Rooms</div>
             </div>
-          ))}
-        </div>
-      </main>
+            
+            <div style={{
+              background: 'var(--bg-card)',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: 'var(--card-shadow)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.activeRooms}</div>
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Active Rooms</div>
+            </div>
+            
+            <div style={{
+              background: 'var(--bg-card)',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: 'var(--card-shadow)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📊</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.totalPolls}</div>
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Total Polls</div>
+            </div>
+            
+            <div style={{
+              background: 'var(--bg-card)',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: 'var(--card-shadow)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>💬</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.totalResponses}</div>
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Total Responses</div>
+            </div>
+          </div>
 
-      {/* Create Room Modal */}
-      {showCreateModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
+          {/* Create Room Section */}
           <div style={{
-            background: 'white',
-            borderRadius: '24px',
-            padding: '32px',
-            maxWidth: '450px',
-            width: '90%',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
+            background: 'var(--bg-card)',
+            borderRadius: '16px',
+            padding: '24px',
+            boxShadow: 'var(--card-shadow)',
+            border: '1px solid var(--border-color)',
+            marginBottom: '24px'
           }}>
-            <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', marginBottom: '20px' }}>
-              Create New Assessment Space
-            </h3>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
-                Assessment Title
-              </label>
+            <h2 style={{ margin: '0 0 20px', fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
+              Create New Room
+            </h2>
+            
+            <div style={{ display: 'flex', gap: '12px' }}>
               <input
                 type="text"
-                placeholder="e.g., Algebra Midterm Review"
                 value={roomName}
                 onChange={(e) => setRoomName(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  fontSize: '16px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '12px',
-                  outline: 'none'
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={() => setShowCreateModal(false)}
+                placeholder="Enter room name..."
                 style={{
                   flex: 1,
-                  padding: '14px',
-                  background: '#f3f4f6',
-                  color: '#374151',
-                  border: 'none',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  fontWeight: '500'
+                  padding: '12px 16px',
+                  border: '2px solid var(--border-color)',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  background: 'var(--input-bg)',
+                  color: 'var(--text-primary)'
                 }}
-              >
-                Cancel
-              </button>
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateRoom()}
+              />
+              
               <button
                 onClick={handleCreateRoom}
-                disabled={!roomName.trim() || isCreating}
+                disabled={isCreating || !roomName.trim()}
                 style={{
-                  flex: 1,
-                  padding: '14px',
-                  background: roomName.trim() && !isCreating ? '#1e40af' : '#9ca3af',
+                  padding: '12px 24px',
+                  background: (isCreating || !roomName.trim()) ? '#9ca3af' : '#3b82f6',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '12px',
-                  cursor: roomName.trim() ? 'pointer' : 'not-allowed',
-                  fontSize: '16px',
-                  fontWeight: '500'
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: (isCreating || !roomName.trim()) ? 'not-allowed' : 'pointer'
                 }}
               >
-                {isCreating ? 'Creating...' : 'Create'}
+                {isCreating ? 'Creating...' : 'Create Room'}
               </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Footer */}
-      <footer style={{
-        textAlign: 'center',
-        padding: '32px',
-        color: '#6b7280',
-        fontSize: '14px'
-      }}>
-        <p style={{ margin: 0 }}>Spandan - Poll Question Generator</p>
-      </footer>
+          {/* Rooms List */}
+          <h2 style={{ margin: '0 0 20px', fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
+              My Rooms
+            </h2>
+            
+            {isLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                Loading rooms...
+              </div>
+            ) : rooms && rooms.filter(r => !r.endedAt).length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+                {rooms.filter(r => !r.endedAt).map((room) => (
+                  <div
+                    key={room._id}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      padding: '20px',
+                      background: 'var(--nav-hover)',
+                      borderRadius: '16px',
+                      border: '1px solid var(--border-color)',
+                      minHeight: '140px'
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px' }}>
+                        {room.name}
+                      </h3>
+                      <p style={{ margin: '0 0 4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        Code: <strong style={{ color: '#3b82f6', letterSpacing: '1px' }}>{room.code}</strong>
+                      </p>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        {room.questions?.length || 0} questions
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigate(`/room/${room._id}`)}
+                      style={{
+                        marginTop: '16px',
+                        padding: '10px 16px',
+                        background: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Manage →
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
+                <p>No rooms yet. Create your first room above!</p>
+              </div>
+            )}
+        </div>
       </div>
     </div>
   )

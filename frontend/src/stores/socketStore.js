@@ -65,6 +65,10 @@ export const useSocketStore = create((set, get) => ({
       console.log('Leaderboard updated:', data)
     })
 
+    socket.on('new_question', (data) => {
+      console.log('New question received:', data)
+    })
+
     // Authenticate the socket
     socket.emit('authenticate', { token })
 

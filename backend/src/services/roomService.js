@@ -68,9 +68,15 @@ export const setCurrentQuestion = async (roomId, questionId) => {
 }
 
 export const deactivateRoom = async (roomId) => {
-  return updateRoom(roomId, { isActive: false })
-}
-
-export const activateRoom = async (roomId) => {
-  return updateRoom(roomId, { isActive: true })
+  const room = await Room.findByIdAndUpdate(
+    roomId,
+    { $set: { isActive: false, endedAt: new Date() } },
+    { new: true, runValidators: true }
+  )
+  
+  if (!room) {
+    throw new Error('Room not found')
+  }
+  
+  return room
 }

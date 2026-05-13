@@ -7,6 +7,38 @@ body {
   margin: 0;
 }
 
+/* Theme Variables - Light (default) */
+:root {
+  --bg-primary: #f8f9fb;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --border-color: #e5e7eb;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  --header-bg: linear-gradient(to right, #1e40af, #3b82f6);
+  --sidebar-bg: #ffffff;
+  --sidebar-shadow: 2px 0 20px rgba(0,0,0,0.08);
+  --nav-hover: #f3f4f6;
+  --input-bg: #ffffff;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg-primary: #111827;
+  --bg-secondary: #1f2937;
+  --bg-card: #1f2937;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --border-color: #374151;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --header-bg: linear-gradient(to right, #1e3a8a, #2563eb);
+  --sidebar-bg: #1f2937;
+  --sidebar-shadow: 2px 0 20px rgba(0,0,0,0.5);
+  --nav-hover: #374151;
+  --input-bg: #1f2937;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -23,4 +55,13 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #2563eb;
+}
+
+/* Dark mode scrollbar */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #4b5563;
 }

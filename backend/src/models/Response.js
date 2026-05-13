@@ -1,45 +1,45 @@
 import mongoose from 'mongoose'
 
 const responseSchema = new mongoose.Schema({
-  question: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Question',
-    required: true
-  },
-  room: {
+  roomId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Room',
     required: true
   },
-  student: {
+  questionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Question',
+    required: true
+  },
+  studentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
   selectedOption: {
     type: Number,
-    required: true,
-    min: 0
+    required: true
   },
   isCorrect: {
     type: Boolean,
-    required: true
+    default: false
   },
   responseTime: {
-    type: Number, // Time in milliseconds from question start to response
-    required: true
+    type: Number,
+    default: 0
+  },
+  points: {
+    type: Number,
+    default: 0
   },
   createdAt: {
     type: Date,
     default: Date.now
   }
-}, {
-  timestamps: true
 })
 
-// Compound index for preventing duplicate responses
-responseSchema.index({ question: 1, student: 1 }, { unique: true })
-responseSchema.index({ room: 1, createdAt: -1 })
+// Index for fast lookups
+responseSchema.index({ roomId: 1, questionId: 1, studentId: 1 }, { unique: true })
 
 const Response = mongoose.model('Response', responseSchema)
 

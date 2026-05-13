@@ -4,345 +4,219 @@ import useAuthStore from '../stores/authStore'
 import useSocketStore from '../stores/socketStore'
 import useRoomStore from '../stores/roomStore'
 import Sidebar from '../components/Sidebar'
-import SpandanIcon from '../components/SpandanIcon'
+import ThemeToggle from '../components/ThemeToggle'
+import ProfileDropdown from '../components/ProfileDropdown'
 
 function StudentDashboard() {
   const navigate = useNavigate()
-  const { user, token, isAuthenticated, logout } = useAuthStore()
+  const { user, token } = useAuthStore()
   const { socket, isConnected, joinRoom, leaveRoom } = useSocketStore()
-  const { joinRoomByCode, setAuthToken } = useRoomStore()
+  const { rooms, setAuthToken } = useRoomStore()
   
   const [roomCode, setRoomCode] = useState('')
   const [isJoining, setIsJoining] = useState(false)
-  const [error, setError] = useState('')
-  const [joinedRoom, setJoinedRoom] = useState(null)
+  const [stats, setStats] = useState({
+    totalRooms: 0,
+    pollsTaken: 0,
+    pollsMissed: 0,
+    average: 0
+  })
 
   useEffect(() => {
     if (token) {
       setAuthToken(token)
+      fetchStudentStats()
     }
   }, [token])
 
-  const handleJoinRoom = async () => {
-    if (!roomCode.trim()) {
-      setError('Please enter a room code')
-      return
-    }
-    
-    setIsJoining(true)
-    setError('')
-    
+  const fetchStudentStats = async () => {
     try {
-      const room = await joinRoomByCode(roomCode.trim().toUpperCase())
-      setJoinedRoom(room)
-      joinRoom(room.code, user._id)
+      const res = await fetch(`/api/responses/stats/student/${user._id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.stats) {
+        setStats({
+          totalRooms: data.stats.totalRooms || 0,
+          pollsTaken: data.stats.pollsTaken || 0,
+          pollsMissed: 0, // TODO: calculate properly
+          average: data.stats.average || 0
+        })
+      }
     } catch (err) {
-      setError(err.message || 'Failed to join room')
+      console.error('Failed to fetch student stats:', err)
+    }
+  }
+
+  const handleJoinRoom = async () => {
+    if (!roomCode.trim()) return
+    setIsJoining(true)
+    try {
+      // First validate the room exists via API
+      const room = await joinRoomByCode(roomCode.trim().toUpperCase())
+      // Then join via socket
+      joinRoom(room.code, user._id)
+      // Then navigate to session
+      navigate(`/session/${room.code}`)
+    } catch (err) {
+      console.error('Failed to join room:', err)
     } finally {
       setIsJoining(false)
     }
-  }
-
-  const handleLeaveRoom = () => {
-    if (joinedRoom) {
-      leaveRoom(joinedRoom.code)
-      setJoinedRoom(null)
-    }
-  }
-
-  const handleLogout = () => {
-    if (joinedRoom) {
-      leaveRoom(joinedRoom.code)
-    }
-    logout()
-    navigate('/')
-  }
-
-  if (!isAuthenticated) {
-    navigate('/')
-    return null
   }
 
   return (
     <div style={{
       display: 'flex',
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #f8f9fb 90%, #e0e7ff 100%)',
+      background: 'var(--bg-primary)',
       fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif'
     }}>
       <Sidebar user={user} />
       
       {/* Main Content */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <header style={{
-          background: 'linear-gradient(to right, #1e40af, #3b82f6)',
-        color: 'white',
-        padding: '16px 32px',
+      <div style={{
+        flex: 1,
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+        flexDirection: 'column',
+        marginLeft: '240px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            background: 'rgba(255,255,255,0.2)',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '24px'
-          }}>
-            <SpandanIcon />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '700', margin: 0 }}>Spandan</h1>
-            <p style={{ fontSize: '12px', opacity: 0.8, margin: 0 }}>Student Dashboard</p>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: isConnected ? '#3b82f6' : '#ef4444'
-            }}></div>
-            <span style={{ fontSize: '14px' }}>{isConnected ? 'Connected' : 'Disconnected'}</span>
-          </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 16px',
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: '8px',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main style={{ maxWidth: '800px', margin: '0 auto', padding: '32px' }}>
-        {/* Welcome Banner */}
-        <div style={{
-          background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
-          borderRadius: '20px',
-          padding: '40px',
+        {/* Header - Blue gradient bar */}
+        <header style={{
+          background: 'var(--header-bg)',
           color: 'white',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '32px',
-          boxShadow: '0 10px 40px rgba(16, 185, 129, 0.3)'
+          padding: '24px 32px'
         }}>
-          <div>
-            <h2 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px' }}>
-              Welcome, {user?.name || 'Student'}
-            </h2>
-            <p style={{ fontSize: '16px', opacity: 0.9, margin: 0 }}>
-              Join classroom sessions and participate in polls
-            </p>
-          </div>
           <div style={{
-            width: '100px',
-            height: '100px',
-            background: 'rgba(255,255,255,0.2)',
-            borderRadius: '50%',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            <span style={{ fontSize: '40px' }}>📚</span>
-          </div>
-        </div>
-
-        {/* Join Room Card */}
-        {!joinedRoom ? (
-          <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            padding: '32px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-            border: '1px solid #e5e7eb'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-              <div style={{
-                width: '48px',
-                height: '48px',
-                background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
-                borderRadius: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <span style={{ fontSize: '24px', color: 'white' }}>🚪</span>
-              </div>
-              <div>
-                <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', margin: 0 }}>
-                  Join a Session
-                </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
-                  Enter the room code provided by your teacher
-                </p>
-              </div>
+            <div>
+              <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '700' }}>
+                Welcome, {user?.name || 'Student'}!
+              </h1>
+              <p style={{ margin: '4px 0 0', opacity: 0.9, fontSize: '14px' }}>
+                Join rooms and participate in polls
+              </p>
             </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <ThemeToggle />
+              <ProfileDropdown />
+            </div>
+          </div>
+        </header>
 
-            {error && (
-              <div style={{
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: '8px',
-                padding: '12px 16px',
-                marginBottom: '20px',
-                color: '#dc2626',
-                fontSize: '14px'
-              }}>
-                {error}
-              </div>
-            )}
+        {/* Dashboard content */}
+        <div style={{ flex: 1, padding: '32px' }}>
+          {/* Stats Cards */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '20px',
+            marginBottom: '32px'
+          }}>
+            <div style={{
+              background: 'var(--bg-card)',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: 'var(--card-shadow)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📚</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.totalRooms}</div>
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Total Rooms</div>
+            </div>
+            
+            <div style={{
+              background: 'var(--bg-card)',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: 'var(--card-shadow)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.pollsTaken}</div>
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Polls Taken</div>
+            </div>
+            
+            <div style={{
+              background: 'var(--bg-card)',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: 'var(--card-shadow)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>❌</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.pollsMissed}</div>
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Polls Missed</div>
+            </div>
+            
+            <div style={{
+              background: 'var(--bg-card)',
+              borderRadius: '16px',
+              padding: '24px',
+              boxShadow: 'var(--card-shadow)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📈</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)' }}>{stats.average}%</div>
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Average</div>
+            </div>
+          </div>
 
+          {/* Quick Join Section */}
+          <div style={{
+            background: 'var(--bg-card)',
+            borderRadius: '16px',
+            padding: '24px',
+            boxShadow: 'var(--card-shadow)',
+            border: '1px solid var(--border-color)'
+          }}>
+            <h2 style={{ margin: '0 0 20px', fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)' }}>
+              Quick Join
+            </h2>
+            
             <div style={{ display: 'flex', gap: '12px' }}>
               <input
                 type="text"
-                placeholder="Enter room code (e.g., ABC123)"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                maxLength={6}
+                placeholder="Enter room code..."
+                maxLength={8}
                 style={{
                   flex: 1,
-                  padding: '14px 16px',
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  textAlign: 'center',
-                  letterSpacing: '4px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '12px',
+                  padding: '12px 16px',
+                  border: '2px solid var(--border-color)',
+                  borderRadius: '10px',
+                  fontSize: '14px',
                   outline: 'none',
-                  textTransform: 'uppercase'
+                  background: 'var(--input-bg)',
+                  color: 'var(--text-primary)',
+                  letterSpacing: '2px',
+                  fontWeight: '600'
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
               />
+              
               <button
                 onClick={handleJoinRoom}
-                disabled={!roomCode.trim() || isJoining}
+                disabled={isJoining || !roomCode.trim()}
                 style={{
-                  padding: '14px 32px',
-                  background: roomCode.trim() && !isJoining ? '#1e40af' : '#9ca3af',
+                  padding: '12px 24px',
+                  background: (isJoining || !roomCode.trim()) ? '#9ca3af' : '#3b82f6',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '12px',
-                  cursor: roomCode.trim() ? 'pointer' : 'not-allowed',
-                  fontSize: '16px',
+                  borderRadius: '10px',
+                  fontSize: '14px',
                   fontWeight: '600',
-                  boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)'
+                  cursor: (isJoining || !roomCode.trim()) ? 'not-allowed' : 'pointer'
                 }}
               >
-                {isJoining ? 'Joining...' : 'Join'}
+                {isJoining ? 'Joining...' : 'Join Room'}
               </button>
             </div>
           </div>
-        ) : (
-          /* Joined Room View */
-          <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            padding: '32px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-            border: '1px solid #e5e7eb'
-          }}>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{
-                width: '80px',
-                height: '80px',
-                background: '#eff6ff',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 16px'
-              }}>
-                <span style={{ fontSize: '40px' }}>✅</span>
-              </div>
-              <h3 style={{ fontSize: '24px', fontWeight: '700', color: '#1e40af', marginBottom: '8px' }}>
-                Joined Successfully!
-              </h3>
-              <p style={{ fontSize: '16px', color: '#6b7280' }}>
-                You are now in the session: <strong>{joinedRoom.name}</strong>
-              </p>
-            </div>
-
-            <div style={{
-              background: '#f3f4f6',
-              borderRadius: '12px',
-              padding: '20px',
-              marginBottom: '20px',
-              textAlign: 'center'
-            }}>
-              <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>
-                Room Code
-              </p>
-              <p style={{ fontSize: '32px', fontWeight: '700', color: '#1f2937', letterSpacing: '6px' }}>
-                {joinedRoom.code}
-              </p>
-            </div>
-
-            <button
-              onClick={handleLeaveRoom}
-              style={{
-                width: '100%',
-                padding: '14px',
-                background: '#fef2f2',
-                color: '#dc2626',
-                border: '1px solid #fecaca',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: '500'
-              }}
-            >
-              Leave Session
-            </button>
-          </div>
-        )}
-
-        {/* Instructions */}
-        <div style={{
-          background: '#eff6ff',
-          borderRadius: '16px',
-          padding: '24px',
-          marginTop: '24px',
-          border: '1px solid #bfdbfe'
-        }}>
-          <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#1e40af', marginBottom: '12px' }}>
-            How to Join a Session
-          </h4>
-          <ol style={{ color: '#3b82f6', fontSize: '14px', lineHeight: '1.8', paddingLeft: '20px', margin: 0 }}>
-            <li>Get the room code from your teacher</li>
-            <li>Enter the 6-character code above</li>
-            <li>Click Join to enter the classroom session</li>
-            <li>Answer poll questions when they appear</li>
-          </ol>
         </div>
-      </main>
-
-      {/* Footer */}
-      <footer style={{
-        textAlign: 'center',
-        padding: '32px',
-        color: '#6b7280',
-        fontSize: '14px'
-      }}>
-        <p style={{ margin: 0 }}>Spandan - Poll Question Generator</p>
-      </footer>
       </div>
     </div>
   )
