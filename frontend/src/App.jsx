@@ -17,6 +17,7 @@ import RoomHistoryPage from './pages/RoomHistoryPage'
 import RoomResultsPage from './pages/RoomResultsPage'
 import ProfilePage from './pages/ProfilePage'
 import { API_URL } from './config.js'
+import SpandanGPTWidget from './components/SpandanGPTWidget'
 
 function App() {
   const { isDark } = useThemeStore()
@@ -121,8 +122,23 @@ function App() {
     }
   }, [isDark])
 
+  // ── Electron Companion Mode ──
+  // When Electron loads this page with ?mode=companion, render ONLY the orb overlay
+  // with transparent background. No website UI at all.
+  const isCompanionMode = new URLSearchParams(window.location.search).get('mode') === 'companion'
+
+  if (isCompanionMode) {
+    return (
+      <>
+        <style>{`body, html, #root { background: transparent !important; margin: 0; padding: 0; overflow: hidden; }`}</style>
+        <SpandanGPTWidget isCompanionMode={true} />
+      </>
+    )
+  }
+
+  // Pure Spandan website — no orb here. The orb is a separate Electron overlay.
   return (
-    <BrowserRouter basename="/spandan">
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
         <Route path="/" element={<AuthPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

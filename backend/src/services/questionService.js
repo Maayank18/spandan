@@ -1,5 +1,5 @@
 import dotenv from 'dotenv'
-dotenv.config()
+dotenv.config({ override: true })
 import Question from '../models/Question.js'
 import Response from '../models/Response.js'
 import Room from '../models/Room.js'
@@ -357,37 +357,69 @@ function parseOptions(options, type) {
   }))
 }
 
-// MiniMax API call
+// MiniMax API call (via Samagama Proxy)
 async function generateWithMiniMax(prompt) {
-  const response = await fetch('https://api.minimax.io/v1/text/chatcompletion_v2', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.minimaxApiKey}`
-    },
-    body: JSON.stringify({
-      model: 'MiniMax-M2.7',
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
+  try {
+    console.log(`[SpandanGPT DEBUG] Using API Key: ${config.minimaxApiKey?.substring(0, 15)}...`)
+    const response = await fetch('https://samagama.in/platform/proxy/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.minimaxApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'MiniMaxAI/MiniMax-M2.7', // Keep standard Samagama model
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      })
     })
-  })
 
+    if (!response.ok) {
+      const errorData = await response.text()
+      console.warn(`[SpandanGPT] Samagama Proxy Error: ${response.status} - ${errorData}. Falling back to local mock.`)
+      return getMockFallbackResponse(prompt)
+    }
 
-  if (!response.ok) {
-    const errorData = await response.text()
-    throw new Error(`MiniMax API error: ${response.status} - ${errorData}`)
+    const data = await response.json()
+    
+    if (data.base_resp && data.base_resp.status_code !== 0) {
+      console.warn(`[SpandanGPT] API Error: ${data.base_resp.status_msg}. Falling back.`)
+      return getMockFallbackResponse(prompt)
+    }
+    if (data.type === 'error') {
+      console.warn(`[SpandanGPT] API Error: ${data.error?.message}. Falling back.`)
+      return getMockFallbackResponse(prompt)
+    }
+
+    console.log('[SpandanGPT] MiniMax Raw Response:', JSON.stringify(data, null, 2))
+    return data.choices?.[0]?.message?.content || getMockFallbackResponse(prompt)
+  } catch (err) {
+    console.warn(`[SpandanGPT] Network/Proxy Error: ${err.message}. Falling back to local mock.`)
+    return getMockFallbackResponse(prompt)
   }
-
-  const data = await response.json()
-  return data.choices?.[0]?.message?.content || ''
 }
 
+function getMockFallbackResponse(prompt) {
+  // Graceful fallback to allow testing without Samagama reservations
+  return JSON.stringify({
+    questions: [
+      {
+        type: 'MCQ',
+        question: "This is an auto-generated fallback question (Proxy Reservation Inactive). Based on your prompt: " + prompt.substring(0, 50) + "...",
+        options: [
+          { text: "True", isCorrect: true },
+          { text: "False", isCorrect: false }
+        ]
+      }
+    ]
+  })
+}
 // OpenAI API call
 async function generateWithOpenAI(prompt, model = 'gpt-4o-mini') {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {

@@ -32,7 +32,11 @@ export const useAuthStore = create(
           const data = await response.json()
           
           if (!response.ok) {
-            throw new Error(data.error || 'Login failed')
+            let errorMsg = data.error || 'Login failed'
+            if (data.details && data.details.length > 0) {
+              errorMsg = data.details.map(d => d.message).join(' | ')
+            }
+            throw new Error(errorMsg)
           }
           
           set({ 
@@ -61,7 +65,11 @@ export const useAuthStore = create(
           const data = await response.json()
           
           if (!response.ok) {
-            throw new Error(data.error || 'Registration failed')
+            let errorMsg = data.error || 'Registration failed'
+            if (data.details && data.details.length > 0) {
+              errorMsg = data.details.map(d => d.message).join(' | ')
+            }
+            throw new Error(errorMsg)
           }
           
           set({ 

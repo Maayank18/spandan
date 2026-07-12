@@ -1,5 +1,5 @@
 import dotenv from 'dotenv'
-dotenv.config()
+dotenv.config({ override: true })
 
 export const config = {
   smtpEmail: process.env.SMTP_EMAIL || '',

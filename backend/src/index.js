@@ -11,6 +11,7 @@ import mongoose from 'mongoose'
 // Import routes
 import authRoutes from './routes/auth.js'
 import roomRoutes from './routes/rooms.js'
+import spandanGptRoutes from './routes/spandangpt.js'
 import questionRoutes from './routes/questions.js'
 import transcriptionRoutes from './routes/transcription.js'
 import transcriptRoutes from './routes/transcripts.js'
@@ -19,7 +20,7 @@ import responseRoutes from './routes/responses.js'
 // Import models for reference
 import './models/index.js'
 
-dotenv.config()
+dotenv.config({ override: true })
 
 const BASE_PATH = process.env.BASE_PATH || ''
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3001').split(',').map(s => s.trim())
@@ -112,6 +113,7 @@ app.use(requestTimeout)
 // API Routes
 app.use('/api/auth', authRoutes)
 app.use('/api/rooms', roomRoutes)
+app.use('/api/spandangpt', spandanGptRoutes)
 app.use('/api/questions', questionRoutes)
 app.use('/api/transcription', transcriptionRoutes)
 app.use('/api/transcripts', transcriptRoutes)
