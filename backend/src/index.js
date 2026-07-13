@@ -47,6 +47,10 @@ const requestTimeout = (req, res, next) => {
 const app = express()
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
+  pingTimeout: 60000,      // 60 seconds (prevents dropping slow clients)
+  pingInterval: 25000,     // 25 seconds
+  connectTimeout: 45000,   // 45 seconds (allows slow clients to connect)
+  maxHttpBufferSize: 1e6,  // 1MB max payload to prevent memory exhaustion
   cors: {
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, Socket.IO polling)
@@ -73,19 +77,19 @@ app.set('trust proxy', 1)
 // Rate limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 2000, // limit each IP to 2000 requests per windowMs (increased for real-time classroom use)
+  max: 20000, // limit each IP to 20000 requests per windowMs (increased for massive institutional real-time classroom use)
   message: { error: 'Too many requests, please try again later' }
 })
 
 const authLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 300, // limit each IP to 300 auth requests per hour (increased for live classroom use)
+  max: 5000, // limit each IP to 5000 auth requests per hour (increased for massive institutional live classroom use)
   message: { error: 'Too many authentication attempts, please try again later' }
 })
 
 const responseLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5000, // limit each IP to 5000 response submissions per windowMs (high limit for live quizzes)
+  max: 20000, // limit each IP to 20000 response submissions per windowMs (massive limit for live quizzes)
   message: { error: 'Too many response submissions, please try again later' }
 })
 
@@ -320,7 +324,9 @@ const connectDB = async () => {
     
     await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000
+      socketTimeoutMS: 45000,
+      maxPoolSize: 1000, // Handle 700+ simultaneous connections
+      minPoolSize: 50    // Keep connections warm
     })
     
     console.log('MongoDB connected successfully')
