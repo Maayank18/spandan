@@ -77,13 +77,18 @@ app.set('trust proxy', 1)
 // Rate limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20000, // limit each IP to 20000 requests per windowMs (increased for massive institutional real-time classroom use)
+  // Note: hundreds of students at a live event usually share ONE public IP (venue/campus NAT),
+  // so this per-IP limit is effectively shared across the whole room. Sized for that.
+  max: 50000, // limit each IP to 50000 requests per windowMs (shared across a NATed classroom)
   message: { error: 'Too many requests, please try again later' }
 })
 
 const authLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5000, // limit each IP to 5000 auth requests per hour (increased for massive institutional live classroom use)
+  // Only count FAILED auth attempts: 700 students behind one NAT share this bucket, so counting
+  // successful logins would trip a 429 mid-event (seen at ~250 logins). Failures still throttle brute-force.
+  skipSuccessfulRequests: true,
+  max: 5000, // limit each IP to 5000 FAILED auth attempts per hour (brute-force backstop)
   message: { error: 'Too many authentication attempts, please try again later' }
 })
 
